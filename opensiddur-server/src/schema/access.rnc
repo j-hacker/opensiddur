@@ -1,0 +1,59 @@
+# Access rights XML
+# Open Siddur Project
+# Copyright 2012,2014 Efraim Feinstein <efraim@opensiddur.org>
+# Licensed under the GNU Lesser General Public License, version 3 or later
+default namespace  = "http://jewishliturgy.org/ns/access/1.0"
+
+start = Access
+
+# ThreeWay switch:
+# true, false, inherit. The latter indicates that the given exception should not interfere with
+# other defaults or exceptions
+ThreeWay = ( "true" | "false" | "inherit" )
+
+Permissions = (
+  attribute read { xsd:boolean },
+  attribute write { xsd:boolean }
+)
+
+Read = (
+  attribute read { xsd:boolean }
+)
+
+Write = (
+  attribute write { xsd:boolean }
+)
+
+Chmod = (
+  attribute chmod { xsd:boolean }
+)
+
+Relicense = (
+  attribute relicense { xsd:boolean }
+)
+
+Access = element access {
+  ## permissions that affect the caller. 
+  ## Read-only: cannot be used for changing permissions
+  element you { Read, Write, Relicense, Chmod }?,
+  # default sets of permissions for owner/owner group/world
+  # no permissions for owner because you cannot make something read-only or unreadable for its owner
+  element owner { xsd:string }, 
+  element group { Write, xsd:string },
+  # default permissions to a user who is not the owner, not in the owning group, or not logged in
+  element world { Read, Write },
+  # grant special access to a group or user; write="true" if the user or group can edit
+  element grant {
+    (
+      element grant-group { Write, xsd:string } |
+      element grant-user { Write, xsd:string }
+    )*
+  }?,
+  # deny rights to a group or user; read="true" if the group/user can read, false if you want to deny read rights 
+  element deny {
+    (
+      element deny-group { Read, xsd:string } |
+      element deny-user { Read, xsd:string }
+    )*
+  }?
+}
