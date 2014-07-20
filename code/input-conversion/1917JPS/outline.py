@@ -2,10 +2,23 @@
 # Extract the outline (table of contents) from the PDF
 # and generate an XSL template.
 # For the 1917 JPS PDF extraction project for the Open Siddur Project.
-# Copyright 2011-13 Marc Stober and licensed under the terms of the LGPL
+# Copyright 2011-14 Marc Stober and licensed under the terms of the LGPL
 
-# reads in outline.xsl2.template
-# writes out outline.xsl2
+# This script now does two things:
+# 1. Uses PDFMiner to look at the outline in the PDF and generate a Makefile
+#	that separately extracts each book based on its location in the PDF.
+# 2. Reads in outline.xsl2.template and writes out outline.xsl2.
+#	This is done for each book file.
+
+# Usage (from source/1917JPS directory with symlink to code):
+#	code/outline.py 
+#		Extract TOC from PDF and generate XSL.
+#	code/outline.py -r
+#		Extract TOC from PDF and output it (raw).
+#	code/outline.py -m
+#		Extract TOC from PDF and generate Makefile with target for each book.
+#	code/outline.py 853-933
+#		Extract TOC from PDF and generate XSL for specific pages.
 
 import os.path
 import pprint
@@ -38,10 +51,8 @@ def get_toc(extra=False):
 	for (level,title,dest,a,se) in outlines:
 		title = title.replace(chr(10), '').replace(chr(13), '').strip()
 		# skip the individual chapter number nodes
-		#if level < 4 and not title.isdigit():
-		# TODO: Figure out 'THE TWELVE' which are books at sub-book level.
-		if level < 3 and not title.isdigit():
-			location[level - 1] = title
+		if level < 4 and not title.isdigit():
+			location[level - 1] = title 
 			# Get the destination page number from the action.
 			# Thanks to https://groups.google.com/d/topic/pdfminer-users/KwMJHZTCKbE/discussion
 			pageid = a.resolve()['D'][0].objid
@@ -52,33 +63,14 @@ def get_toc(extra=False):
 	if len(sys.argv) == 1:
 		if extra:
 			toc.append([number_of_pages])
-		return toc
-
-	# TODO: Still need this?
-	# If a specific list of pages from the original PDF were specified,
-	# create a custom TOC where the page number is the 1-based index of this page
-	# in the set of pages; 
-	# i.e., the same as the page id in the XML produced
-	# when that list of pages is passed in to pdf2txt.py.
-
-	selectedPages = sys.argv[1]
-	from_page, to_page = [int(pnum) for pnum in selectedPages.split('-')]
-	selectedPages = range(from_page, to_page + 1)
-	customToc = []
-	for pn, pnum in enumerate(selectedPages):
-		# walk backward to see what section we're in
-		for entry in reversed(toc):
-			if pnum >= entry[-1]:
-				#print pn + 1
-				entry[-1] = pn + 1
-				# is it same as previous? if not:
-				if (pn == 0 and len(customToc) == 0) or entry[:-1] != customToc[-1][:-1]:
-				#if entry[:-1] != customToc[-1][:-1]:
-					#print 'appending ' + str(entry) + '...'
-					customToc.append(entry[:])
-				break
-
-	return customToc
+	else:
+		# If a specific list of pages from the original PDF were specified,
+		# create a custom TOC.
+		selectedPages = sys.argv[1]
+		from_page, to_page = [int(pnum) for pnum in selectedPages.split('-')]
+		toc = [entry for entry in toc 
+					 if entry[-1] >= from_page and entry[-1] <= to_page]
+	return toc
 
 def generate_xsl(toc):
 
@@ -182,7 +174,6 @@ def generate_makefile(toc):
 			(book, pages))
 		print('')
 
-
 	return
 
 # Shortcut to sys.stdout.write, a.k.a. print without newline
@@ -190,8 +181,8 @@ def write(s):
 	sys.stdout.write(s)
 
 def get_book_path(book):
-	# make doesn't play nice with spaces
-	# TODO put them back to match sefaria-data
+	# make doesn't play nice with spaces.
+	# They are put back later to match sefaria-data.
 	book = book.replace(' ', '_')
 	return 'books/{0}.html'.format(book)
 
@@ -202,12 +193,16 @@ if __name__ == '__main__':
 	opts = [arg for arg in sys.argv if arg[0] == '-']
 	for opt in opts: sys.argv.remove(opt)
 
+	# TODO: Only call this once and save it, not for each file.
 	toc = get_toc(MAKE_OPTION in opts)
 
 	if '-r' in opts:
 		pprint.pprint(toc) # debugging
 
 	if MAKE_OPTION in opts:
+		# THE TWELVE are all one file.
+		# TODO: Still need psalms special case above with this?
+		toc = [entry for entry in toc if len(entry) < 4]
 		generate_makefile(toc)
-	if not len(opts): # this was the original
+	if not len(opts):
 		generate_xsl(toc)
